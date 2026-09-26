@@ -1,0 +1,25 @@
+# Generated index
+index/*
+!index/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local tooling / secrets
+.claude/
+.env
+*.log
+

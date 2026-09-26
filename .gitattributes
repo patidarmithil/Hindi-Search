@@ -1,0 +1,2 @@
+# Keep the corpus byte-for-byte as it is (no line-ending conversion).
+Data/** -text

@@ -1,0 +1,845 @@
+/* खोज — ledger (bahi-khata) page: indigo ink on white paper, blue ruled rows,
+   a red double margin rule, and a yellow marker for matches. */
+
+:root {
+  --paper: #fbfbf8;
+  --surface: #ffffff;
+  --ink: #1c2554;
+  --ink-soft: #545b78;
+  --rule: #d5dcec;
+  --rule-strong: #aab6d6;
+  --margin: #c0312b;
+  --mark: #ffe14d;
+  --mark-ink: #1c2554;
+  --hover: #eef1f9;
+
+  --font-hi: "Tiro Devanagari Hindi", "Noto Serif Devanagari", "Nirmala UI", serif;
+  --font-ui: "Hind", "Nirmala UI", system-ui, sans-serif;
+
+  --margin-x: 64px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10142b;
+    --surface: #171c3a;
+    --ink: #e8eaf4;
+    --ink-soft: #9ba2c0;
+    --rule: #28305a;
+    --rule-strong: #3d4679;
+    --margin: #e0584f;
+    --mark: #ffd43b;
+    --mark-ink: #10142b;
+    --hover: #1e2448;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--margin);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- page + margin */
+
+.page {
+  position: relative;
+  max-width: 880px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 0 24px 48px var(--margin-x);
+  display: flex;
+  flex-direction: column;
+}
+
+/* The ledger's red double margin rule, running the full height of the page. */
+.page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--margin-x) - 22px);
+  width: 5px;
+  border-left: 1.5px solid var(--margin);
+  border-right: 1.5px solid var(--margin);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+main {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------------ masthead */
+
+.masthead {
+  padding: 72px 0 28px;
+  transition: padding 0.25s ease;
+}
+
+.masthead.is-compact {
+  padding: 28px 0 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--font-hi);
+  font-weight: 400;
+  font-size: clamp(4.5rem, 14vw, 8rem);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.is-compact .wordmark {
+  font-size: 3rem;
+}
+
+.wordmark a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tagline {
+  margin: 12px 0 0;
+  max-width: 34em;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+}
+
+.is-compact .tagline {
+  margin: 0;
+  font-size: 0.95rem;
+  flex: 1 1 18em;
+}
+
+/* -------------------------------------------------------------------- search */
+
+.search {
+  position: relative;
+  container-type: inline-size;
+}
+
+.search-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 6px;
+}
+
+.search-line:focus-within {
+  border-bottom-color: var(--margin);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 8px 0;
+  font-family: var(--font-hi);
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  line-height: 1.5;
+}
+
+.search-input:focus {
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.icon-btn:hover,
+.icon-btn.is-on {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+.icon-btn.is-on {
+  border-color: var(--rule-strong);
+}
+
+.btn-primary {
+  flex: none;
+  height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--margin);
+}
+
+.btn-quiet {
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.btn-quiet:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* autocomplete
+   Keyboard closed: the word list drops down under the search line.
+   Keyboard open: the list is docked in a column beside the keys, so neither
+   covers the other. */
+
+.ac-drop {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 28px -12px rgb(28 37 84 / 0.35);
+}
+
+.ac {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.ac li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+
+.ac li:hover,
+.ac li.is-active {
+  background: var(--hover);
+}
+
+.ac li.is-active {
+  box-shadow: inset 3px 0 0 var(--margin);
+}
+
+.ac-term {
+  font-family: var(--font-hi);
+  font-size: 1.2rem;
+}
+
+.ac-df {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------ keyboard panel (docked) */
+
+.kb-panel {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 13.5rem minmax(0, 1fr);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ac-dock {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.ac-dock-head {
+  margin: 0;
+  padding: 12px 14px 8px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ac-dock .ac {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.ac-dock .ac li {
+  padding: 5px 14px;
+  gap: 10px;
+}
+
+.ac-dock .ac-df {
+  font-size: 0.78rem;
+}
+
+.ac-dock-empty {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ac-dock-empty span {
+  font-family: var(--font-hi);
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------ Hindi keyboard */
+
+.kb {
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-group {
+  display: grid;
+  gap: 4px;
+}
+
+.kb-label {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.kb-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-key {
+  min-width: 2.4rem;
+  height: 2.4rem;
+  padding: 0 5px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper);
+  font-family: var(--font-hi);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kb-key:hover {
+  border-color: var(--ink);
+  background: var(--hover);
+}
+
+.kb-key:active {
+  background: var(--mark);
+  color: var(--mark-ink);
+}
+
+.kb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.kb-wide {
+  flex: 1 1 8rem;
+  max-width: 14rem;
+}
+
+.kb-text,
+.kb-wide {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  padding: 0 14px;
+}
+
+.kb-spacer {
+  flex: 1;
+}
+
+.kb-enter {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+.kb-enter:hover {
+  background: var(--margin);
+  border-color: var(--margin);
+}
+
+/* Narrow: stack the word list above the keyboard as a short scrolling strip. */
+@container (max-width: 620px) {
+  .kb-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ac-dock {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .ac-dock .ac {
+    max-height: 9.5rem;
+  }
+
+  .ac-dock-head {
+    padding: 8px 12px 6px;
+  }
+}
+
+/* --------------------------------------------------------------- suggestions */
+
+.suggest {
+  margin-top: 32px;
+  display: grid;
+  gap: 20px;
+}
+
+.suggest-title {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 3px 14px 1px;
+  font-family: var(--font-hi);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--ink);
+  background: var(--hover);
+}
+
+.chip-word {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.chip-df {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.more-suggest {
+  margin-top: 40px;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+
+.more-suggest summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.more-suggest .suggest {
+  margin-top: 16px;
+}
+
+/* ------------------------------------------------------------------- results */
+
+.results {
+  margin-top: 28px;
+  transition: opacity 0.15s;
+}
+
+.results.is-loading {
+  opacity: 0.55;
+}
+
+.summary {
+  margin-bottom: 18px;
+}
+
+.summary-main {
+  margin: 0;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-main strong {
+  font-weight: 600;
+}
+
+.summary-sub {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  margin: 10px 0 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--margin);
+  background: var(--hover);
+  font-size: 0.95rem;
+}
+
+.notice-error {
+  margin-top: 24px;
+}
+
+.empty {
+  margin: 24px 0;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+}
+
+/* ledger rows: rank | document | count, ruled like an account book */
+
+.ledger {
+  border-top: 2px solid var(--ink);
+}
+
+.ledger-head,
+.ledger-row {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 5.5rem;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.ledger-head {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.ledger-row {
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ledger-row:hover {
+  background: var(--hover);
+}
+
+.ledger-row:focus-visible {
+  outline-offset: -2px;
+}
+
+.rank {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc {
+  display: grid;
+  min-width: 0;
+}
+
+.doc-title {
+  font-family: var(--font-hi);
+  font-size: 1.15rem;
+  line-height: 1.5;
+}
+
+.doc-file {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.count {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--margin);
+}
+
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------- modal */
+
+.modal {
+  width: min(820px, calc(100vw - 24px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 30px 60px -20px rgb(16 20 43 / 0.5);
+}
+
+.modal[open] {
+  animation: modal-in 0.18s ease-out;
+}
+
+.modal::backdrop {
+  background: rgb(16 20 43 / 0.55);
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 50px);
+}
+
+.modal-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px 20px 14px 28px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.modal-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-family: var(--font-hi);
+  font-weight: 400;
+  font-size: 1.5rem;
+  line-height: 1.45;
+}
+
+.modal-meta {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.modal-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-tools span {
+  margin-right: auto;
+  color: var(--ink-soft);
+}
+
+.modal-body {
+  overflow-y: auto;
+  padding: 20px 28px 32px;
+  font-family: var(--font-hi);
+  font-size: 1.15rem;
+  line-height: 1.95;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.modal-body:focus-visible {
+  outline-offset: -4px;
+}
+
+mark {
+  background: var(--mark);
+  color: var(--mark-ink);
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+mark.is-current {
+  outline: 2px solid var(--margin);
+  outline-offset: 1px;
+}
+
+.loading-text {
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+}
+
+/* -------------------------------------------------------------------- footer */
+
+.foot {
+  margin-top: 56px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.foot p {
+  margin: 0;
+}
+
+/* -------------------------------------------------------------------- mobile */
+
+@media (max-width: 640px) {
+  :root {
+    --margin-x: 34px;
+  }
+
+  .page {
+    padding-right: 16px;
+  }
+
+  .page::before {
+    left: 14px;
+    width: 4px;
+  }
+
+  .masthead {
+    padding-top: 40px;
+  }
+
+  .is-compact .tagline {
+    display: none;
+  }
+
+  .btn-primary {
+    padding: 0 14px;
+  }
+
+  .kb {
+    padding: 10px;
+  }
+
+  .kb-key {
+    min-width: 2.3rem;
+    height: 2.4rem;
+    font-size: 1.15rem;
+  }
+
+  .ledger-head,
+  .ledger-row {
+    grid-template-columns: 2rem 1fr 3.5rem;
+    gap: 10px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .modal-head,
+  .modal-tools,
+  .modal-body {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
