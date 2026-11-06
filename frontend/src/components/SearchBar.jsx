@@ -18,6 +18,15 @@ export default function SearchBar({ value, onChange, onSubmit, autoFocus }) {
   const [acOpen, setAcOpen] = useState(false);
 
   // Close keyboard + autocomplete when clicking anywhere outside the search area.
+  // Opening the keyboard: bring the whole panel on screen (no-op if it already fits).
+  useEffect(() => {
+    if (!kbOpen) return;
+    const id = requestAnimationFrame(() =>
+      wrapRef.current?.querySelector(".kb-panel")?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+    return () => cancelAnimationFrame(id);
+  }, [kbOpen]);
+
   useEffect(() => {
     const onDown = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
@@ -162,7 +171,7 @@ export default function SearchBar({ value, onChange, onSubmit, autoFocus }) {
           lang="hi"
           autoComplete="off"
           spellCheck="false"
-          placeholder="हिंदी शब्द लिखें, जैसे शेयर बाजार"
+          placeholder="हिंदी शब्द लिखें, जैसे गंगा नदी"
           value={value}
           onChange={(e) => {
             onChange(e.target.value);

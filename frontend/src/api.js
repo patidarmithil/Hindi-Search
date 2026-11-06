@@ -1,6 +1,10 @@
-// Same-origin by default: the Vite dev server proxies /api, and in production
-// FastAPI serves both the API and this app. Override with VITE_API_BASE.
-const BASE = import.meta.env.VITE_API_BASE ?? "";
+// Same-origin by default: the Vite dev server proxies /api, and a local build
+// served by FastAPI shares its origin. Override with VITE_API_BASE.
+// On Vercel the site is static, so calls go to the FastAPI backend on Render.
+const DEPLOYED_API = "https://hindi-search.onrender.com";
+const BASE =
+  import.meta.env.VITE_API_BASE ??
+  (window.location.hostname.endsWith(".vercel.app") ? DEPLOYED_API : "");
 
 async function get(path, params = {}, signal) {
   const url = new URL(BASE + path, window.location.origin);
@@ -26,7 +30,9 @@ export const api = {
   document: (id, q, signal) => get(`/api/document/${id}`, { q }, signal),
   suggestions: () => get("/api/suggestions"),
   autocomplete: (prefix, signal) => get("/api/autocomplete", { prefix, limit: 8 }, signal),
+  index: (term, limit, signal) => get(`/api/index/${encodeURIComponent(term)}`, { limit }, signal),
   stats: () => get("/api/stats"),
+  health: (signal) => get("/api/health", {}, signal),
 };
 
 export const nf = new Intl.NumberFormat("en-US");

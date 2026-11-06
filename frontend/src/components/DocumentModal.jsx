@@ -70,11 +70,14 @@ export default function DocumentModal({ row, query, onClose }) {
         <header className="modal-head">
           <div className="modal-heading">
             <h2 id="modal-title" lang="hi">
-              {row.title || row.file}
+              {row.title}
             </h2>
             <p className="modal-meta">
-              {row.file}, rank {row.rank}. The search words appear {nf.format(row.count)}{" "}
-              {row.count === 1 ? "time" : "times"}.
+              Doc {row.doc_id}, rank {row.rank}. The search words appear {nf.format(row.count)}{" "}
+              {row.count === 1 ? "time" : "times"}.{" "}
+              <a href={row.url} target="_blank" rel="noreferrer">
+                Open on Wikipedia
+              </a>
             </p>
           </div>
           <button type="button" className="icon-btn" onClick={() => dialogRef.current.close()} aria-label="Close">

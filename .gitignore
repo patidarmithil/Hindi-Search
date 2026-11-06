@@ -23,3 +23,17 @@ Thumbs.db
 .env
 *.log
 
+
+# Hindi Wikipedia data (too large for git; published as GitHub release assets)
+wiki_raw/
+corpus/*
+!corpus/.gitkeep
+release/
+submission/
+
+# Old 16k Hindi news dataset (replaced by Hindi Wikipedia)
+Data/
+
+# Local notes (not part of the project)
+task.txt
+progress.md

@@ -11,6 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import numpy as np  # noqa: E402
+
 from engine.searcher import Searcher  # noqa: E402
 
 TARGET_MS = 500
@@ -46,10 +48,9 @@ def main() -> None:
 
     s = Searcher().load()
     print(f"Index loaded in {s.load_time_sec:.2f} s  "
-          f"({len(s.docs):,} docs, {len(s.vocab):,} terms)\n")
+          f"({s.n_docs:,} docs, {len(s.vocab):,} terms)\n")
 
-    by_df = sorted(s.vocab, key=lambda t: len(s.postings[t][0]), reverse=True)
-    frequent = by_df[:50]  # longest posting lists = worst case
+    frequent = [s.vocab[i] for i in np.argsort(-s.df)[:50]]  # longest posting lists = worst case
     rand_terms = rng.sample(s.vocab, args.n)
 
     suites = {
@@ -58,14 +59,15 @@ def main() -> None:
         "2-word random": [" ".join(rng.sample(s.vocab, 2)) for _ in range(args.n)],
         "3-word frequent (AND)": [" ".join(rng.sample(frequent, 3)) for _ in range(args.n)],
         "5-word frequent (AND)": [" ".join(rng.sample(frequent, 5)) for _ in range(args.n)],
+        "2-word frequent phrase": ['"' + " ".join(rng.sample(frequent, 2)) + '"' for _ in range(args.n)],
         "unknown word": ["क्ष्यज्ञ" + str(i) for i in range(args.n)],
     }
     all_ok = all(report(name, run(s, qs)) for name, qs in suites.items())
 
     # cached path: same query repeated
-    s.search("शेयर बाजार")
+    s.search("गंगा नदी")
     t0 = time.perf_counter()
-    s.search("शेयर बाजार")
+    s.search("गंगा नदी")
     print(f"\ncached repeat query: {(time.perf_counter() - t0) * 1000:.3f} ms")
     print(f"\nOverall: {'ALL PASS' if all_ok else 'SOME FAILED'} (< {TARGET_MS} ms)")
 

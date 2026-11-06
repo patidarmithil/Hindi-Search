@@ -1,0 +1,166 @@
+==========================================================================================
+Positional Inverted Index - Test Cases and Rare-Term Positional Index
+==========================================================================================
+Corpus            : Hindi Wikipedia (hiwiki-latest-pages-articles.xml.bz2)
+Documents         : 129,601
+Tokens            : 50,713,481
+Vocabulary        : 1,017,007 terms (held in main memory)
+Postings          : 21,733,258 (term, document) pairs
+postings.bin      : 316.8 MB on disk (secondary memory)
+Index build time  : 58.81 s with 10 worker processes
+Vocabulary load   : 1.48 s
+
+Notation: term -> DF, CF: doc_id (title), tf=<term frequency>: <positions>
+Positions are 0-based token indexes in the article (title + text), after normalization.
+DF = number of documents containing the term; CF = total occurrences in the collection.
+Each [PASS] means the value was recomputed independently from the raw article text.
+
+==========================================================================================
+PART A - 5 TEST CASES
+==========================================================================================
+
+Test case 1: positional posting list of one term (भारत), read from disk
+------------------------------------------------------------------------------------------
+  Term: भारत    DF = 53226    CF = 127753    (postings.bin offset 217,511,303, 789716 bytes)
+  भारत -> 53226, 127753:
+      doc       2 (हिन्दी), tf=52: <18, 52, 66, 87, 153, 200, 230, 243, 312, 320, 543, 564, 793, 810, 1094, ... (+37)>
+      doc       3 (फ़ारसी भाषा), tf=2: <307, 353>
+      doc       4 (देवनागरी), tf=16: <411, 547, 779, 851, 1315, 2677, 2687, 2854, 2898, 2968, 2981, 3007, 3487, 3537, 4071, ... (+1)>
+      doc       5 (भारत), tf=207: <0, 1, 4, 21, 43, 83, 193, 209, 225, 242, 273, 349, 354, 415, 435, ... (+192)>
+      doc       6 (संस्कृत भाषा), tf=12: <227, 452, 1362, 1393, 1512, 1676, 1819, 1857, 1872, 1886, 2094, 2371>
+  [PASS] positions of 'भारत' in the first 5 documents match the raw text
+  [PASS] DF = length of the posting list (53,226)
+  [PASS] CF = sum of all term frequencies (127,753)
+  [PASS] posting list is sorted by doc_id
+
+Test case 2: phrase query "महात्मा गांधी" (uses term positions)
+------------------------------------------------------------------------------------------
+  mode=phrase  documents found=885  phrase occurrences=1,406  time=6.09 ms
+    rank 1: doc 119430 (प्यारेलाल नय्यर) phrase count=12, recount=12
+    rank 2: doc 84460 (भारतीय ५०० रुपये का नोट) phrase count=12, recount=12
+    rank 3: doc 112667 (भारतीय २० रुपये का नोट) phrase count=10, recount=10
+    rank 4: doc 112668 (भारतीय ५० रुपये का नोट) phrase count=9, recount=9
+    rank 5: doc 23381 (हिंदुस्तानी प्रचार सभा, मुंबई) phrase count=3, recount=3
+  [PASS] phrase mode used and documents found
+  [PASS] every phrase count equals a recount of consecutive words in the raw text
+  [PASS] reversed phrase finds fewer documents (9 < 885): word order matters
+
+Test case 3: multi-word AND query: गंगा नदी हिमालय
+------------------------------------------------------------------------------------------
+  mode=and  documents found=206  time=0.56 ms
+    rank 1: doc 20304 (गंगा की सहायक नदियाँ) count=40 BM25=21.0192
+    rank 2: doc 1404 (महानंदा नदी) count=10 BM25=20.7616
+    rank 3: doc 113107 (गंगा बेसिन) count=18 BM25=19.8249
+    rank 4: doc 100373 (सेती नदी) count=13 BM25=19.705
+    rank 5: doc 3312 (पाञ्चाल) count=11 BM25=19.5525
+  [PASS] AND mode used
+  [PASS] every result contains all three words
+
+Test case 4: normalization, unknown word and OR fallback
+------------------------------------------------------------------------------------------
+  'ज़िला' (with nukta) -> 10,686 documents; 'जिला' -> 10,686 documents
+  [PASS] nukta spelling is normalized to the same term
+  'क्ष्यज्ञत्र' -> mode=none, documents=0, missing=['क्ष्यज्ञत्र']
+  [PASS] unknown word returns no documents
+  'हिमालय क्ष्यज्ञत्र' -> mode=or, documents=1,464
+  [PASS] OR fallback returns the documents of the known word
+
+Test case 5: vocabulary in main memory, posting lists on secondary memory
+------------------------------------------------------------------------------------------
+  query 'भारतीय संविधान': 2 posting lists read, 278,264 bytes of 332,140,064 in postings.bin, 1.49 ms
+  [PASS] exactly one disk read per query term
+  [PASS] a query reads only a small part of postings.bin
+  in-memory lexicon arrays (df, cf, offset, size): 31.0 MB for 1,017,007 terms; posting lists stay in postings.bin (316.8 MB)
+  [PASS] bytes read = 8 x DF per term (doc_ids + tfs only; positions skipped for non-phrase queries)
+  slowest of 5 uncached queries (incl. the most frequent word 'के'): 48.3 ms
+  [PASS] every query answered in under 500 ms
+
+==========================================================================================
+PART B - 10 RARE TERMS WITH THEIR FULL POSITIONAL INDEX
+==========================================================================================
+Rare terms: DF of 2-3, Devanagari words of 5+ characters, sampled with seed 7.
+
+Rare term 1: असगरअली
+------------------------------------------------------------------------------------------
+  Term: असगरअली    DF = 2    CF = 2    (postings.bin offset 36,311,553, 26 bytes)
+  असगरअली -> 2, 2:
+      doc   88187 (असगर अली इंजीनियर), tf=1: <3>
+      doc   91269 (फकरुद्दीन बेन्नूर), tf=1: <79>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 2: इंटीग्रिन
+------------------------------------------------------------------------------------------
+  Term: इंटीग्रिन    DF = 2    CF = 4    (postings.bin offset 44,554,407, 30 bytes)
+  इंटीग्रिन -> 2, 4:
+      doc   26333 (कोलेजन), tf=1: <1920>
+      doc  120836 (मॉर्फोजेनेसिस), tf=3: <1081, 1096, 1131>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 3: उदयराम
+------------------------------------------------------------------------------------------
+  Term: उदयराम    DF = 3    CF = 11    (postings.bin offset 53,963,565, 51 bytes)
+  उदयराम -> 3, 11:
+      doc   15399 (गुजराती साहित्य), tf=1: <2130>
+      doc   26231 (डिंगल), tf=7: <1232, 1237, 1291, 1296, 1354, 1357, 1373>
+      doc   29763 (सालासर बालाजी), tf=3: <330, 337, 762>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 4: कठिनाईपूर्ण
+------------------------------------------------------------------------------------------
+  Term: कठिनाईपूर्ण    DF = 2    CF = 2    (postings.bin offset 71,578,335, 28 bytes)
+  कठिनाईपूर्ण -> 2, 2:
+      doc   26766 (एनचांटेड (फिल्म)), tf=1: <3496>
+      doc   27952 (कुष्ठरोग), tf=1: <8498>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 5: झब्बन
+------------------------------------------------------------------------------------------
+  Term: झब्बन    DF = 2    CF = 2    (postings.bin offset 136,055,344, 28 bytes)
+  झब्बन -> 2, 2:
+      doc   16589 (सदर बाजार, दिल्ली), tf=1: <1029>
+      doc   21394 (बिहपुर), tf=1: <1100>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 6: दारिद
+------------------------------------------------------------------------------------------
+  Term: दारिद    DF = 2    CF = 2    (postings.bin offset 152,190,926, 28 bytes)
+  दारिद -> 2, 2:
+      doc   26240 (शीतला देवी), tf=1: <938>
+      doc   56331 (भानुसिंह ठाकुरेर पदावली), tf=1: <149>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 7: फुटहिल्स
+------------------------------------------------------------------------------------------
+  Term: फुटहिल्स    DF = 2    CF = 3    (postings.bin offset 200,819,673, 29 bytes)
+  फुटहिल्स -> 2, 3:
+      doc   28622 (कैलगरी), tf=2: <7530, 7577>
+      doc   28640 (अल्बर्टा), tf=1: <10278>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 8: मिलचन
+------------------------------------------------------------------------------------------
+  Term: मिलचन    DF = 2    CF = 2    (postings.bin offset 230,723,469, 26 bytes)
+  मिलचन -> 2, 2:
+      doc   97981 (बुलेट टू द हेड), tf=1: <63>
+      doc  118235 (बारबेरियन (2022 फ़िल्म)), tf=1: <32>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 9: शोधसंस्थान
+------------------------------------------------------------------------------------------
+  Term: शोधसंस्थान    DF = 2    CF = 2    (postings.bin offset 282,908,745, 27 bytes)
+  शोधसंस्थान -> 2, 2:
+      doc   15063 (भांडारकर प्राच्य शोध संस्थान), tf=1: <315>
+      doc   54167 (कोपनहेगन विश्वविद्यालय), tf=1: <6>
+  [PASS] positions, DF and CF match the raw articles
+
+Rare term 10: हॉबिट्स
+------------------------------------------------------------------------------------------
+  Term: हॉबिट्स    DF = 2    CF = 4    (postings.bin offset 326,153,207, 31 bytes)
+  हॉबिट्स -> 2, 4:
+      doc   16709 (अमानक तिथियों की सूची), tf=2: <824, 855>
+      doc  109020 (द रोड गोज़ एवर ऑन (गाना)), tf=2: <551, 977>
+  [PASS] positions, DF and CF match the raw articles
+
+==========================================================================================
+SUMMARY: 26 checks passed, 0 failed
+==========================================================================================

@@ -1,14 +1,17 @@
-"""Terminal interface for the Hindi inverted-index search engine.
+"""Terminal interface for the Hindi positional-index search engine.
 
 Usage:
-    python cli.py                          interactive search loop
-    python cli.py "शेयर बाजार"             one-shot search, then exit
-    python cli.py "बाजार" --top 20         print only the top 20 results
-    python cli.py --show 42 --query बाजार  print document 42 with matches highlighted
-    python cli.py --rebuild                rebuild the index before searching
+    python cli.py                                interactive search loop
+    python cli.py "भारत की राजधानी"              one-shot search, then exit
+    python cli.py "\"महात्मा गांधी\""              phrase search (words next to each other)
+    python cli.py "गंगा" --top 20                print only the top 20 results
+    python cli.py --show 42 --query गंगा         print document 42 with matches highlighted
+    python cli.py --index गंगा                   print the positional posting list of a term
+    python cli.py --rebuild                      rebuild the index before searching
 
 Interactive commands:
     :open <rank>   show a result of the last search with matches highlighted
+    :index <term>  positional posting list of a term (df, cf, positions)
     :top <N|all>   change how many results are printed
     :suggest       list suggested words and sample queries
     :help          show commands
@@ -23,11 +26,13 @@ from engine.indexer import build_index
 from engine.searcher import Searcher
 
 PROMPT = "\nखोज / Search > "
-TITLE_WIDTH = 70
+TITLE_WIDTH = 60
 
 HELP = """Commands:
   <query>        search (several words = documents containing all of them)
+  "<phrase>"     phrase search using term positions, e.g. "महात्मा गांधी"
   :open <rank>   show a result of the last search with matches highlighted
+  :index <term>  positional posting list of a term (df, cf, positions)
   :top <N|all>   number of results to print (current: {top})
   :suggest       suggested words and sample queries
   :help          this help
@@ -84,10 +89,10 @@ def load_searcher(style: Style, rebuild: bool) -> Searcher:
         print(f"Index built in {stats['build_time_sec']} s")
     s = Searcher().load()
     st = s.stats
-    print(style.bold("Hindi Search Engine (inverted index)"))
+    print(style.bold("Hindi Search Engine (positional inverted index over Hindi Wikipedia)"))
     print(f"  documents indexed : {st['documents']:,}")
-    print(f"  vocabulary        : {st['vocabulary']:,} terms")
-    print(f"  postings          : {st['postings']:,}")
+    print(f"  vocabulary        : {st['vocabulary']:,} terms (kept in main memory)")
+    print(f"  postings          : {st['postings']:,} (on disk, postings.bin {st['postings_size_mb']} MB)")
     print(f"  index load time   : {s.load_time_sec:.3f} s")
     return s
 
@@ -96,18 +101,20 @@ def print_results(s: Searcher, query: str, top: int | None, style: Style) -> dic
     res = s.search(query, limit=top)
     print()
     print(f"{style.bold('Query')}              : {query}")
-    # only worth printing when normalization changed the query (nukta, punctuation, ...)
-    if res["terms"] and " ".join(res["terms"]) != " ".join(query.split()):
+    if res["terms"]:
         print(f"{style.bold('Terms')}              : {' '.join(res['terms'])}")
+    if res["phrases"]:
+        print(f"{style.bold('Phrases')}            : {' | '.join(res['phrases'])}")
     if res["missing_terms"]:
         print(style.red(f"Not in any document : {' '.join(res['missing_terms'])}"))
     if res["mode"] == "or":
-        print(style.dim("No document contains every term; showing documents with any term."))
+        print(style.dim("No document contains every term / phrase; showing documents with any of them."))
 
     summary = (
         f"{style.bold('Documents found')}    : {style.green(format(res['total_docs'], ','))}\n"
         f"{style.bold('Documents searched')} : {res['docs_searched']:,}\n"
         f"{style.bold('Total occurrences')}  : {res['total_occurrences']:,}\n"
+        f"{style.bold('Posting lists read')} : {res['disk_reads']} from disk (0 = query cache)\n"
         f"{style.bold('Time taken')}         : {res['time_sec']:.6f} seconds"
     )
     print(summary)
@@ -117,11 +124,11 @@ def print_results(s: Searcher, query: str, top: int | None, style: Style) -> dic
         return res
 
     print()
-    print(style.bold(f"{'Rank':>6}  {'Doc ID':>6}  {'Count':>5}  {'Document':<22}  Title"))
-    print(style.dim("-" * (6 + 2 + 6 + 2 + 5 + 2 + 22 + 2 + TITLE_WIDTH)))
+    print(style.bold(f"{'Rank':>6}  {'Doc ID':>7}  {'Count':>5}  {'BM25':>7}  Title"))
+    print(style.dim("-" * (6 + 2 + 7 + 2 + 5 + 2 + 7 + 2 + TITLE_WIDTH)))
     for r in res["results"]:
         title = r["title"] if len(r["title"]) <= TITLE_WIDTH else r["title"][: TITLE_WIDTH - 1] + "…"
-        print(f"{r['rank']:>6}  {r['doc_id']:>6}  {r['count']:>5}  {r['file']:<22}  {style.dim(title)}")
+        print(f"{r['rank']:>6}  {r['doc_id']:>7}  {r['count']:>5}  {r['score']:>7.3f}  {title}")
 
     shown = len(res["results"])
     if shown < res["total_docs"]:
@@ -133,11 +140,30 @@ def print_results(s: Searcher, query: str, top: int | None, style: Style) -> dic
     return res
 
 
+def print_index(s: Searcher, term: str, style: Style, max_docs: int = 10, max_pos: int = 20) -> dict | None:
+    """Print the positional posting list of one term, as read from postings.bin."""
+    res = s.postings(term, max_docs=max_docs)
+    if res is None:
+        print(style.red(f"'{term}' is not in the vocabulary."))
+        return None
+    print(f"\n{style.bold('Term')} : {res['term']}")
+    print(f"{style.bold('DF')}   : {res['df']:,} documents contain it")
+    print(f"{style.bold('CF')}   : {res['cf']:,} occurrences in the whole collection")
+    print(style.dim(f"record at byte {res['offset']:,} of postings.bin, {res['bytes']:,} bytes"))
+    for p in res["postings"]:
+        pos = ", ".join(map(str, p["positions"][:max_pos]))
+        more = f", ... +{len(p['positions']) - max_pos} more" if len(p["positions"]) > max_pos else ""
+        print(f"  doc {p['doc_id']:>7}  tf {p['tf']:>4}  positions [{pos}{more}]  {style.dim(p['title'])}")
+    if res["shown"] < res["df"]:
+        print(style.dim(f"  ... first {res['shown']} of {res['df']:,} documents shown"))
+    return res
+
+
 def show_document(s: Searcher, doc_id: int, query: str, style: Style) -> None:
     try:
         doc = s.get_document(doc_id, query)
     except KeyError:
-        print(style.red(f"No document with id {doc_id} (valid: 0-{len(s.docs) - 1})."))
+        print(style.red(f"No document with id {doc_id} (valid: 0-{s.n_docs - 1})."))
         return
     text, spans = doc["text"], doc["highlights"]
     parts, last = [], 0
@@ -148,19 +174,18 @@ def show_document(s: Searcher, doc_id: int, query: str, style: Style) -> None:
     parts.append(text[last:])
 
     bar = style.dim("=" * 80)
-    print(f"\n{bar}\n{style.bold(doc['file'])}  (doc id {doc['id']}, {doc['len']:,} words, "
-          f"{len(spans)} highlighted matches)\n{bar}")
+    print(f"\n{bar}\n{style.bold(doc['title'])}  (doc id {doc['id']}, {doc['len']:,} words, "
+          f"{len(spans)} highlighted matches)\n{style.dim(doc['url'])}\n{bar}")
     print("".join(parts).rstrip())
     print(bar)
 
 
 def resolve_doc(s: Searcher, ref: str) -> int | None:
-    """Accept a doc id ('42') or a file name ('Economy (43).txt' / 'Economy (43)')."""
+    """Accept a doc id ('42') or an exact article title ('गंगा नदी')."""
     ref = ref.strip()
     if ref.isdigit():
         return int(ref)
-    name = ref if ref.endswith(".txt") else ref + ".txt"
-    return next((d["id"] for d in s.docs if d["file"] == name), None)
+    return next((i for i, t in enumerate(s.titles) if t == ref), None)
 
 
 def print_suggestions(s: Searcher, style: Style) -> None:
@@ -190,6 +215,12 @@ def interactive(s: Searcher, top: int | None, style: Style) -> None:
             print(HELP.format(top="all" if top is None else top))
         elif line == ":suggest":
             print_suggestions(s, style)
+        elif line.startswith(":index"):
+            arg = line[6:].strip()
+            if arg:
+                print_index(s, arg, style)
+            else:
+                print(style.red("Usage: :index <term>"))
         elif line.startswith(":top"):
             arg = line[4:].strip()
             if arg == "all" or arg == "0":
@@ -222,11 +253,12 @@ def main() -> None:
     if sys.stdin and hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8")
 
-    ap = argparse.ArgumentParser(description="Search 16,000 Hindi documents with an inverted index.")
+    ap = argparse.ArgumentParser(description="Search Hindi Wikipedia with a positional inverted index.")
     ap.add_argument("query", nargs="?", help="run one search and exit (omit for interactive mode)")
     ap.add_argument("--top", type=int, default=0, help="results to print, 0 = all (default: all)")
-    ap.add_argument("--show", metavar="DOC", help="print a document (doc id or file name) and exit")
+    ap.add_argument("--show", metavar="DOC", help="print a document (doc id or exact title) and exit")
     ap.add_argument("--query", dest="highlight", default="", help="words to highlight with --show")
+    ap.add_argument("--index", metavar="TERM", help="print the positional posting list of TERM and exit")
     ap.add_argument("--rebuild", action="store_true", help="rebuild the index before starting")
     ap.add_argument("--no-color", action="store_true", help="disable ANSI colours")
     args = ap.parse_args()
@@ -236,7 +268,9 @@ def main() -> None:
 
     start = time.perf_counter()
     s = load_searcher(style, args.rebuild)
-    if args.show is not None:
+    if args.index:
+        print_index(s, args.index, style, max_docs=args.top or 10)
+    elif args.show is not None:
         doc_id = resolve_doc(s, args.show)
         if doc_id is None:
             sys.exit(f"Document not found: {args.show}")

@@ -1,243 +1,321 @@
-# खोज — Hindi Search Engine
+# खोज — Positional Index for Hindi Wikipedia
 
-An information-retrieval project that searches **16,000 Hindi economy news articles** with an **inverted index (posting lists)**. It can be used two ways:
+**Assignment A1: Positional Index (IR, M2026)** · Roll No. **S20240010143**
 
-- a **website** (React + FastAPI) with a Hindi virtual keyboard, suggestions, ranked results and a document popup with matches highlighted in yellow;
-- a **terminal CLI** that prints the full ranked result list, the time taken and the number of documents searched.
+A positional inverted index over **all of Hindi Wikipedia: 129,601 articles and 50.7 million words**. For every term the index stores its **document frequency (DF)**, its **collection frequency (CF)** and the **position of every occurrence** in every document. The **vocabulary is kept in main memory**; the **posting lists are stored on secondary memory** (`index/postings.bin`, 317 MB on disk). Each query reads only its own terms' posting lists from disk.
 
-Every search is answered in **well under 500 ms**. The worst case measured is about 43 ms, and a typical search takes under 1 ms (see [Performance](#performance)).
-
-**Live website:** _coming soon (link will be added after deployment)_
-
-How to install and run: see [how_to_run.md](how_to_run.md).
+| Link | |
+|---|---|
+| Live website | **https://hindi-search.vercel.app/** |
+| Source code | https://github.com/patidarmithil/Hindi-Search |
+| Dataset (original download) | https://dumps.wikimedia.org/hiwiki/latest/hiwiki-latest-pages-articles.xml.bz2 |
+| Extracted corpus + built index | https://github.com/patidarmithil/Hindi-Search/releases/tag/data-v1 (`hiwiki-corpus.zip`, `hiwiki-index.zip`) |
 
 ---
 
 ## Contents
 
-1. [Features](#features)
-2. [Architecture](#architecture)
-3. [How search works](#how-search-works)
-4. [Why it is fast](#why-it-is-fast)
-5. [Performance](#performance)
-6. [Tech stack](#tech-stack)
-7. [Project structure](#project-structure)
-8. [API reference](#api-reference)
-9. [Testing](#testing)
+1. [Assignment checklist](#1-assignment-checklist)
+2. [Dataset](#2-dataset)
+3. [The positional index](#3-the-positional-index)
+4. [How to run](#4-how-to-run)
+5. [Modules](#5-modules)
+6. [Output: 5 test cases and 10 rare terms](#6-output-5-test-cases-and-10-rare-terms)
+7. [Searching with the index](#7-searching-with-the-index)
+8. [Performance](#8-performance)
+9. [Website](#9-website)
+10. [Project structure](#10-project-structure)
 
 ---
 
-## Features
+## 1. Assignment checklist
 
-| Requirement | Where |
+| Requirement | Done | Where |
+|---|---|---|
+| (a) Indian-language dataset: a wiki dump, one XML file with every article | Yes | Hindi Wikipedia dump, 242 MB `.xml.bz2` ([section 2](#2-dataset)) |
+| (c) Positional index: term positions in the postings | Yes | `engine/indexer.py`, `index/postings.bin` |
+| (c) Collection Frequency and Document Frequency per term | Yes | `index/lexicon.tsv` (`term df cf offset bytes`) |
+| (d) Vocabulary in main memory | Yes | `engine/searcher.py` loads `lexicon.tsv` into sorted arrays |
+| (d) Entire postings list on secondary memory | Yes | `index/postings.bin`; one seek and read per term per query |
+| README: how to run, description of every module | Yes | this file |
+| Source code in one zip | Yes | `S20240010143-src.zip` |
+| Output: 5 test cases, 10 rare terms with their positional index | Yes | `output/test_cases.txt` (26 checks, all pass) |
+| Full data and index as a link, not uploaded | Yes | GitHub release `data-v1` |
+
+Extras: phrase search ("महात्मा गांधी") using positions, BM25 ranking, AND search with OR fallback, Hindi normalization (nukta, zero-width characters), parallel index building, a terminal search tool, 42 unit tests for the engine, and a live website.
+
+---
+
+## 2. Dataset
+
+| | |
 |---|---|
-| Search Hindi words over 16,000 `.txt` files in `Data/` | `engine/` (inverted index + searcher) |
-| Results from the posting index in < 500 ms | measured with `scripts/benchmark.py` |
-| Virtual Hindi keyboard when the search bar is clicked | `frontend/src/components/HindiKeyboard.jsx` |
-| Suggested queries and words below the search bar | `frontend/src/components/Suggestions.jsx`, built by the indexer |
-| Each document with the number of times the word appears | results table (website) and CLI |
-| Total documents found, time taken in seconds | results summary (website) and CLI |
-| Click a result to read the document with the word highlighted in yellow | `frontend/src/components/DocumentModal.jsx`, `cli.py :open` |
-| Terminal interface with full result list, time and documents searched | `cli.py` |
+| Source | Hindi Wikipedia XML dump from Wikimedia: one XML file containing every article |
+| Download | https://dumps.wikimedia.org/hiwiki/latest/hiwiki-latest-pages-articles.xml.bz2 |
+| Dump used | dated 1 Nov 2026, 242 MB compressed |
+| Pages in the dump | 176,041 main-namespace pages that are not redirects |
+| Articles kept | **129,601** (pages with at least 200 characters of text after cleaning) |
+| Extracted text | 696 MB (`corpus/hiwiki_articles.jsonl`) |
+| Tokens | 50,713,481 (avg 391 per article) |
+| Vocabulary | 1,017,007 distinct terms |
 
-Extras: autocomplete while typing, AND search for several words with an automatic OR fallback, nukta-insensitive matching (`बाज़ार` = `बाजार`), pagination, shareable search URLs, previous/next match in the popup, light and dark themes, mobile layout.
+**Why Wikipedia and not FIRE:** the FIRE Hindi collections can only be obtained by signing a user agreement with the FIRE organisers, so they cannot be downloaded from a public link. The Hindi Wikipedia dump is public, and it is the "single XML file containing all wiki articles" the assignment names.
 
----
+`engine/wiki_extractor.py` streams the compressed dump with `bz2` and `xml.etree.iterparse`, so memory stays small. It keeps main-namespace (`ns 0`) pages that are not redirects and converts MediaWiki markup to plain text:
 
-## Architecture
+- removes templates and infoboxes `{{...}}`, tables `{| ... |}`, `<ref>` citations, comments, `<math>` and similar tags;
+- turns links `[[target|label]]` into `label` and drops file, category and interlanguage links;
+- drops external URLs, bold/italic quotes, heading `=` signs and list markers.
 
-```mermaid
-flowchart LR
-    A[Data/<br/>16,000 .txt files] --> B[Tokenizer<br/>normalize + split]
-    B --> C[Indexer<br/>multiprocessing]
-    C --> D[(index/<br/>postings.bin<br/>docs.json<br/>stats.json<br/>suggestions.json)]
-    D --> E[Searcher<br/>in-memory index]
-    E --> F[cli.py<br/>terminal]
-    E --> G[FastAPI<br/>backend/main.py]
-    G -->|JSON over HTTP| H[React + Vite<br/>frontend/]
-```
-
-The work is split into an **offline** step and an **online** step:
-
-1. **Offline — build the index once** (`python -m engine.indexer`, about 3.6 s).
-   Every document is read, normalized and tokenized, and the term counts are merged into posting lists. The result is written to `index/`.
-2. **Online — answer queries from memory.**
-   `Searcher.load()` reads the index once (about 0.1–0.2 s). After that, a query never scans the documents: it only looks up posting lists in memory. The CLI and the FastAPI server both use the same `Searcher` class, so both give identical results.
-
-Locally, the FastAPI server can also serve the built React app, so the whole site runs as one process. Online, the API runs as a Render Web Service and the React app as a Render Static Site (see [how_to_run.md](how_to_run.md#7-deployment-github--render)).
+Each article is written as one JSON line: `{"id", "wiki_id", "title", "url", "text"}`.
 
 ---
 
-## How search works
+## 3. The positional index
 
-### 1. Normalization and tokenization (`engine/tokenizer.py`)
+### Tokenization (`engine/tokenizer.py`)
 
 The same function is used for documents and queries, so they always agree.
 
 | Step | Why |
 |---|---|
-| Unicode **NFC** normalization | the same letter can be stored in different byte forms |
-| Remove the **nukta** (`़`), e.g. `ज़्यादा` → `ज्यादा`, `बाज़ार` → `बाजार` | the corpus spells the same word both ways |
+| Unicode NFC normalization | the same letter can be stored in different byte forms |
+| Remove the nukta (`़`): `ज़िला` → `जिला` | Wikipedia spells many words both ways |
 | Remove zero-width characters (ZWJ, ZWNJ, BOM) | invisible characters would split words |
 | Lowercase Latin letters | `GDP` = `gdp` |
-| Split with a regex into Devanagari words, Latin words and numbers | drops `।`, `॥`, quotes, brackets, commas and hyphens |
+| Split into Devanagari words, Latin words and numbers | drops `।`, `॥`, punctuation and quotes |
 
-Stopwords (`के`, `में`, `है`, ...) are **not removed**. They stay searchable, and are only kept out of the suggestion chips.
+Stopwords are kept, because a positional index must know where every word is (phrase queries such as "भारत की राजधानी" need `की`). A word's **position** is its 0-based index among the article's tokens; the title comes first, so position 0 is the first word of the title.
 
-### 2. Inverted index (`engine/indexer.py`)
+### What is stored
 
-```
-term  ->  ( doc_ids: array('i') [3, 17, 42, ...],   sorted ascending
-            tfs:     array('i') [2,  1,  5, ...] )   times the term occurs in that doc
-```
-
-- Files are sorted numerically (`Economy (2)` before `Economy (10)`) and given integer IDs `0 … 15999`.
-- Documents are tokenized in parallel with `multiprocessing.Pool`. The results are consumed in order (`imap`), so each posting list is built already sorted by `doc_id`; no sort step is needed.
-- `docs.json` stores the file name, title (first line) and length of each document; `stats.json` stores corpus statistics; `suggestions.json` stores the suggestion chips (curated economy words and sample queries, each checked to return results).
-
-| Index statistic | Value |
-|---|---|
-| Documents | 16,000 |
-| Tokens | 6,074,611 |
-| Vocabulary (unique terms) | 28,469 |
-| Postings (term, document pairs) | 2,936,261 |
-| Index file size | 24.0 MB |
-| Build time | ~3.6 s (15 worker processes; 23 s single-process) |
-
-### 3. Query processing (`engine/searcher.py`)
-
-1. Tokenize the query with the same rules and remove duplicate terms.
-2. Look up each term's posting list in a Python `dict` (hash table, O(1)).
-3. Combine the lists:
-   - **one term:** its posting list is the answer;
-   - **several terms (AND):** intersect the lists with a **two-pointer merge**, starting from the shortest list so the running result stays small. Cost is O(n + m) per merge;
-   - **OR fallback:** if no document contains every term, or a term does not exist in the corpus, the lists are merged with a **k-way heap merge** (`heapq.merge`) and documents containing any term are returned. The response says which mode was used and which words were not found.
-4. **Rank** by the total number of occurrences of the query terms in the document (sum of term frequencies), highest first; ties are broken by document ID.
-5. Return only the requested **page** (25 rows on the website; everything in the CLI) together with the totals.
-
-### 4. Highlighting
-
-For the popup, `get_document()` reads the single requested file and returns the character offsets of every word whose normalized form matches a query term. Offsets point into the **original** text, so spelling variants such as `बाज़ार` are highlighted when searching `बाजार`. The browser wraps those ranges in yellow `<mark>` elements; the CLI uses ANSI colours.
-
-### 5. Autocomplete
-
-The vocabulary is kept as a sorted list. Words that start with the typed prefix form a contiguous range, found with two binary searches (`bisect`), then ordered by document frequency.
-
----
-
-## Why it is fast
-
-| Technique | Effect |
-|---|---|
-| **Offline indexing** | the 80 MB corpus is never scanned at query time |
-| **Index held in memory** (~63 MB RAM) | no disk access per query |
-| **Hash lookup** of posting lists | O(1) per query term |
-| **Posting lists sorted by integer `doc_id`** in compact `array('i')` | linear-time merges, no sorting, small memory |
-| **Shortest list first** in AND queries | the intersection shrinks as early as possible |
-| **Early exit** when an intersection becomes empty | no wasted work |
-| **LRU cache** (1,024 queries) on normalized terms | repeated queries return in ~0.2 ms |
-| **Pagination** | only 25 result rows are serialized and sent to the browser |
-| **orjson + gzip** in FastAPI | fast JSON encoding, small responses |
-| **Index loaded once** at server start (`lifespan`) | no per-request setup |
-| **Debounced autocomplete** (120 ms) and request cancellation in the browser | no flood of requests while typing |
-
----
-
-## Performance
-
-Measured on the development machine (Windows 11, Python 3.13) with `python scripts/benchmark.py`: 200 queries per suite, cache cleared before each suite so the numbers are uncached.
-
-| Query type | Average | p95 | Max | < 500 ms |
-|---|---|---|---|---|
-| Single random word | 0.11 ms | 0.15 ms | 14.2 ms | yes |
-| Single most frequent word (longest posting lists, e.g. `के`, `में`) | 1.7 ms | 5.8 ms | 25.7 ms | yes |
-| 2 random words | 0.09 ms | 0.32 ms | 2.2 ms | yes |
-| 3 frequent words (AND) | 6.5 ms | 11.1 ms | 12.1 ms | yes |
-| 5 frequent words (AND) | 11.3 ms | 22.3 ms | 42.9 ms | yes |
-| Unknown word | 0.01 ms | 0.02 ms | 0.10 ms | yes |
-| Repeated query (cached) | 0.18 ms | | | yes |
-
-Through HTTP (real uvicorn server, round trip including JSON and network stack), an average search takes **5–11 ms** and opening a document takes about **7 ms**.
-
-Index load time at start-up: **0.1–0.2 s**. Memory used by the loaded index: **about 63 MB**.
-
----
-
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Search engine | Python 3.10+ standard library: `re`, `unicodedata`, `array`, `heapq`, `bisect`, `functools.lru_cache`, `multiprocessing`, `pickle` |
-| Backend | FastAPI, Uvicorn, orjson |
-| Frontend | React 19, Vite 8, plain CSS (no UI framework) |
-| Fonts | Tiro Devanagari Hindi (Hindi text), Hind (interface) from Google Fonts |
-| Terminal | Python `argparse`, ANSI colours |
-| Tests | Python `unittest` (39 tests), FastAPI `TestClient` |
-| Deployment | GitHub + Render (Web Service for the API, Static Site for the frontend) |
-
-No search library (Elasticsearch, Whoosh, Lucene, ...) is used; the index and all query algorithms are implemented in `engine/`.
-
----
-
-## Project structure
+For every term:
 
 ```
-IR/
-├── Data/                     16,000 Hindi .txt documents (input)
-├── engine/
-│   ├── config.py             paths and file names
-│   ├── tokenizer.py          normalization, tokenization, stopwords
-│   ├── indexer.py            builds the inverted index  (python -m engine.indexer)
-│   └── searcher.py           query processing, ranking, highlighting, autocomplete
-├── index/                    generated index files (not committed)
-├── backend/
-│   └── main.py               FastAPI app (also serves frontend/dist)
-├── frontend/
-│   ├── index.html
-│   ├── vite.config.js        dev server + /api proxy
-│   └── src/
-│       ├── App.jsx
-│       ├── api.js
-│       ├── styles.css
-│       └── components/       SearchBar, HindiKeyboard, Suggestions, ResultsTable, DocumentModal
-├── cli.py                    terminal interface
-├── scripts/
-│   ├── scan_corpus.py        corpus statistics
-│   └── benchmark.py          latency benchmark
-├── tests/                    unit + integration tests
-├── requirements.txt
-├── .python-version          Python version for Render
-├── Phase.md                  implementation plan
-├── progress.md               progress log
-├── README.md
-└── how_to_run.md
+term -> DF, CF : doc_1 (tf_1): <p1, p2, ...>,  doc_2 (tf_2): <p1, ...>,  ...
 ```
 
+- **DF** (document frequency): number of documents that contain the term.
+- **CF** (collection frequency): total occurrences in the whole collection, the sum of all tf.
+- **tf**: occurrences in one document, the length of its position list.
+
+Example from the real index (`output/test_cases.txt`):
+
+```
+इंटीग्रिन -> 2, 4:
+    doc   26333 (कोलेजन), tf=1: <1920>
+    doc  120836 (मॉर्फोजेनेसिस), tf=3: <1081, 1096, 1131>
+```
+
+### Files (`index/`)
+
+| File | Memory | Content |
+|---|---|---|
+| `postings.bin` (317 MB) | **disk** | every posting list, one binary record per term |
+| `lexicon.tsv` (37 MB) | **main memory** | vocabulary: `term  df  cf  offset  bytes`, sorted by term |
+| `docs.json` (10 MB) | main memory | per document: title, Wikipedia page id, length, byte offset in the corpus |
+| `stats.json` | main memory | corpus and build statistics |
+| `suggestions.json` | main memory | suggested words and sample queries for the UI |
+
+### Record layout of one term in `postings.bin`
+
+All integers are little-endian.
+
+```
+doc_ids    uint32 x DF   ascending document ids
+tfs        uint32 x DF   term frequency in each document
+pos_offs   uint32 x DF   where each document's positions start inside `positions`
+positions  bytes         per document: tf positions, gap-encoded
+                         (first position, then differences), variable-byte code
+```
+
+- **Gap + variable-byte encoding** makes the position lists small: most gaps fit in 1 byte instead of 4 (7 bits per byte, the high bit means "more bytes follow").
+- **The fixed-width part first.** A normal word query reads only `8 x DF` bytes (doc_ids + tfs) with one disk read, with no decoding. Positions are read only for phrase queries and index lookups.
+- **`pos_offs`** lets the lookup tool jump to one document's positions without decoding the others.
+
+### Vocabulary in main memory, postings on disk
+
+At start-up `Searcher.load()` reads `lexicon.tsv` into a sorted Python list of terms plus four NumPy arrays (`df`, `cf`, `offset`, `bytes`): about 31 MB of arrays for 1,017,007 terms. A lookup is a binary search of the sorted vocabulary (`bisect`, O(log V)), which gives the term's byte offset. The searcher then does `seek(offset)` and `read(bytes)` on the open `postings.bin`. No posting list is kept in memory, apart from the last 1,024 query results in an LRU cache. Test case 5 in the output checks this: a query for `भारतीय संविधान` reads 2 records and 278 KB out of the 332 MB file.
+
+### Building the index (`engine/indexer.py`)
+
+1. The corpus is read line by line, and each line's byte offset is recorded so an article can be fetched later with one seek.
+2. **10 worker processes** (`multiprocessing.Pool`) tokenize articles in parallel. For each article a worker returns `term -> (tf, gap-encoded positions)`.
+3. Results come back in document order (`imap`), so every posting list is appended already sorted by doc_id and never needs sorting.
+4. The vocabulary is sorted and every record is written to `postings.bin`, with one `lexicon.tsv` line (term, DF, CF, offset, size) per term.
+
+Build time on the development machine (Intel i5-12500H, 16 threads): **59 s** for 129,601 articles. Extracting the dump takes about 4 minutes.
+
 ---
 
-## API reference
+## 4. How to run
 
-Base URL: `http://127.0.0.1:8000`. Interactive docs are available at `/docs`.
-
-| Method and path | Description |
-|---|---|
-| `GET /api/search?q=&page=1&size=20` | Ranked results page. Returns `total_docs`, `total_occurrences`, `docs_searched`, `time_sec`, `mode` (`single`, `and`, `or`, `none`), `missing_terms`, `page`, `pages`, `results[] {rank, doc_id, file, title, count}` |
-| `GET /api/document/{doc_id}?q=` | Full text of one document plus `highlights` (`[start, end]` character offsets for `q`) |
-| `GET /api/suggestions` | `{words: [{term, df}], queries: [...]}` |
-| `GET /api/autocomplete?prefix=&limit=8` | Vocabulary words starting with the last word of `prefix` |
-| `GET /api/stats` | Index statistics |
-| `GET /api/health` | Status check |
-
-Limits: `q` is 1–200 characters, `size` is 1–100; other values return HTTP 422.
-
----
-
-## Testing
+Requirements: **Python 3.10+** (tested on 3.13) and the packages in `requirements.txt` (`numpy` for the engine; `fastapi`, `uvicorn`, `orjson` only for the website server). Run every command from the project root.
 
 ```bash
-python -m unittest discover -s tests -t .
+python -m pip install -r requirements.txt
 ```
 
-39 tests cover the tokenizer (nukta, zero-width characters, punctuation, matras), posting-list merges, highlight offsets, result counts checked against the raw files, ranking order, AND/OR behaviour, pagination, edge-case queries, the < 500 ms target, the CLI output and every API endpoint.
+**Option A: build everything from the original dump (about 6 minutes)**
 
-Notes on the corpus: numbers were removed from the source articles (for example `मार्च मेंप्रतिशत`), so searches for digits return no results, and a few words appear joined to a neighbour. Matching is on whole words, so `मुद्रास्फीतिप्रतिशत` is a separate term from `मुद्रास्फीति`.
+1. Download the dump (242 MB) into `wiki_raw/`:
+   ```bash
+   curl -L -o wiki_raw/hiwiki-latest-pages-articles.xml.bz2 https://dumps.wikimedia.org/hiwiki/latest/hiwiki-latest-pages-articles.xml.bz2
+   ```
+2. Extract plain-text articles into `corpus/hiwiki_articles.jsonl`:
+   ```bash
+   python -m engine.wiki_extractor
+   ```
+3. Build the positional index into `index/`:
+   ```bash
+   python -m engine.indexer
+   ```
+
+`wiki_extractor` and `indexer` both accept `--limit N` to try the pipeline on the first N articles.
+
+**Option B: download the ready-made corpus and index**
+
+```bash
+python scripts/fetch_data.py
+```
+
+This downloads `hiwiki-corpus.zip` and `hiwiki-index.zip` from the GitHub release and unzips them into `corpus/` and `index/`.
+
+**Use the index**
+
+| Command | What it does |
+|---|---|
+| `python cli.py --index गंगा` | positional posting list of a term: DF, CF, positions per document (`--top N` for N documents) |
+| `python cli.py "गंगा नदी"` | AND search, ranked by BM25 |
+| `python cli.py "\"महात्मा गांधी\""` | phrase search using positions |
+| `python cli.py --show 42 --query गंगा` | print article 42 with the matches highlighted |
+| `python cli.py` | interactive mode: type queries; `:index <term>`, `:open <rank>`, `:top N`, `:help`, `:q` |
+| `python scripts/generate_output.py` | regenerate `output/test_cases.txt` (5 test cases + 10 rare terms) |
+| `python -m unittest discover -s tests -t .` | run the tests (42 engine tests; the repository adds 9 website API tests) |
+| `python scripts/benchmark.py` | query-latency benchmark |
+
+---
+
+## 5. Modules
+
+| Module | Description |
+|---|---|
+| `engine/config.py` | All paths: dump, corpus, index files. |
+| `engine/wiki_extractor.py` | Streams the `.xml.bz2` dump, keeps main-namespace non-redirect pages, removes wiki markup (`clean_wikitext`), writes one JSON article per line. |
+| `engine/tokenizer.py` | `normalize()` (NFC, nukta folding, zero-width removal, lowercase) and `tokenize()` (regex split into Devanagari, Latin and number tokens). The stopword list is used only for suggestions. |
+| `engine/indexer.py` | Builds the positional index in parallel. `encode_gaps` / `decode_gaps` implement the gap + variable-byte code. Writes `postings.bin`, `lexicon.tsv`, `docs.json`, `stats.json`, `suggestions.json`. |
+| `engine/searcher.py` | Loads the vocabulary into memory and reads posting lists from disk (`read_postings`). `postings(term)` returns the full positional list with DF and CF. `search()` handles AND / OR / phrase queries with BM25 ranking; `_phrase()` matches consecutive positions; `get_document()` reads one article and returns highlight offsets; `autocomplete()` finds prefix matches in the sorted vocabulary. |
+| `cli.py` | Terminal interface: index lookup (`--index`), search, phrase search, document view with highlights. |
+| `scripts/generate_output.py` | Produces `output/test_cases.txt`. Every value printed is checked against the raw article text. |
+| `scripts/benchmark.py` | Latency of 700 uncached queries in 7 groups (rare, frequent, AND, phrase, unknown). |
+| `scripts/worker_benchmark.py` | Index build time with different numbers of worker processes. |
+| `scripts/scan_corpus.py` | Corpus statistics (articles, tokens, vocabulary, top terms). |
+| `scripts/fetch_data.py` | Downloads the prebuilt corpus and index from the GitHub release. |
+| `scripts/make_submission.py` | Builds the submission zips (`<roll>-src.zip` and `<roll>-A1-PostIndex-IR-M2026.zip`). |
+| `tests/` | 42 engine unit tests: codec round trip, query parsing, highlighting, positions / DF / CF checked against raw text, sorted postings, phrase counts, AND / OR, disk reads, latency, CLI. The GitHub repository also has `test_api.py`, 9 tests for the website server. |
+| `backend/`, `frontend/` | Website: FastAPI server and React app. Not part of the submission zip; see [section 9](#9-website). |
+
+---
+
+## 6. Output: 5 test cases and 10 rare terms
+
+`output/test_cases.txt` is produced by `python scripts/generate_output.py`. Every posting printed is read from `postings.bin` through the in-memory vocabulary, and then recomputed independently by tokenizing the raw article. **26 of 26 checks pass.**
+
+| # | Test case | What it checks |
+|---|---|---|
+| 1 | Positional list of `भारत` (DF 53,226, CF 127,753) | positions match the raw text; DF = list length; CF = sum of tf; doc_ids sorted |
+| 2 | Phrase `"महात्मा गांधी"` (885 documents) | every phrase count equals a recount in the raw text; the reversed phrase finds only 9 documents |
+| 3 | AND query `गंगा नदी हिमालय` (206 documents) | every result contains all three words |
+| 4 | `ज़िला` vs `जिला`, an unknown word, OR fallback | nukta normalization; unknown word gives 0 results; OR returns the known word's documents |
+| 5 | Vocabulary in memory, postings on disk | one disk read per term; only 8 x DF bytes read for a word query; every query under 500 ms |
+
+**10 rare terms** (DF 2–3, sampled with a fixed seed), each with its full positional index, for example:
+
+```
+Rare term 3: उदयराम
+  Term: उदयराम    DF = 3    CF = 11    (postings.bin offset 53,963,565, 51 bytes)
+  उदयराम -> 3, 11:
+      doc   15399 (गुजराती साहित्य), tf=1: <2130>
+      doc   26231 (डिंगल), tf=7: <1232, 1237, 1291, 1296, 1354, 1357, 1373>
+      doc   29763 (सालासर बालाजी), tf=3: <330, 337, 762>
+  [PASS] positions, DF and CF match the raw articles
+```
+
+---
+
+## 7. Searching with the index
+
+| Query | Mode | How |
+|---|---|---|
+| `गंगा` | single | one posting list read from disk |
+| `गंगा नदी` | AND | sorted doc_id arrays intersected, rarest term first |
+| `"महात्मा गांधी"` | phrase | positions: the phrase starts at p when term k occurs at p + k |
+| `गंगा क्ष्यज्ञ` | OR fallback | if no document has every term, or a term is unknown |
+
+- **Phrase matching.** Each occurrence becomes a global position (document start + position) and term k is shifted back by k. The positions shared by all terms are the phrase starts. This is done with NumPy over a boolean array, and only for documents that contain every term.
+- **Ranking: BM25** (k1 = 1.2, b = 0.75) with IDF from DF and document lengths from `docs.json`. Each result also shows its count of matching words.
+- **Highlighting.** `get_document()` returns character offsets of matches in the raw text. A phrase is highlighted only where its words are consecutive.
+
+---
+
+## 8. Performance
+
+`python scripts/benchmark.py --n 100`: uncached queries, cache cleared before each group.
+
+| Query type | Average | p95 | Max |
+|---|---|---|---|
+| Single random word | 0.13 ms | 0.37 ms | 2.3 ms |
+| Single most frequent word (`के`, `में`: ~100k documents) | 4.2 ms | 18 ms | 39 ms |
+| 3 frequent words (AND) | 13.6 ms | 22 ms | 27 ms |
+| 5 frequent words (AND) | 14.4 ms | 22 ms | 30 ms |
+| 2-word phrase of frequent words (worst case: `"में के"`, 4 million positions) | 85 ms | 175 ms | 375 ms |
+| Unknown word | 1.1 ms | 2.5 ms | 5.4 ms |
+| Repeated query (LRU cache) | 0.27 ms | | |
+
+Every query is answered in under 500 ms. Loading the vocabulary takes about 1.5 s, and the process then uses about 205 MB of RAM.
+
+---
+
+## 9. Website
+
+**https://hindi-search.vercel.app/** has everything on this page in a browser, so the index can be tried without installing anything:
+
+- search with a Hindi on-screen keyboard and word suggestions (autocomplete from the vocabulary, ranked by DF);
+- AND, OR and phrase search over all 129,601 articles, ranked by BM25, with time taken and documents found;
+- a **"Positional index of your words"** panel showing DF, CF, byte offset and per-document positions for every query word, read live from `postings.bin`;
+- the full article with matches highlighted (previous / next match) and a link to the page on Wikipedia.
+
+The free server sleeps when idle, so the first visit can take up to a minute while it starts and loads the vocabulary. The website code (`backend/`, `frontend/`) is in the GitHub repository and is not part of the submission zip.
+
+Running it locally (after building or fetching the index):
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Then open http://127.0.0.1:8000. Deployment: the API runs on Render (build command `pip install -r requirements.txt && python scripts/fetch_data.py`, start command `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`), and the site runs on Vercel (root `frontend`, `npm run build`, output `dist`).
+
+---
+
+## 10. Project structure
+
+```
+Hindi-Search/
+├── engine/
+│   ├── config.py            paths
+│   ├── wiki_extractor.py    XML dump -> plain-text JSONL
+│   ├── tokenizer.py         normalization + tokenization
+│   ├── indexer.py           builds the positional index (parallel)
+│   └── searcher.py          vocabulary in memory, postings from disk, search
+├── cli.py                   terminal interface
+├── scripts/                 generate_output, benchmark, worker_benchmark, scan_corpus, fetch_data, make_submission
+├── tests/                   unit tests
+├── output/test_cases.txt    5 test cases + 10 rare terms
+├── wiki_raw/                downloaded dump (not in git)
+├── corpus/                  hiwiki_articles.jsonl (not in git; GitHub release)
+├── index/                   postings.bin, lexicon.tsv, ... (not in git; GitHub release)
+├── backend/                 FastAPI server for the website
+├── frontend/                React website
+└── requirements.txt
+```

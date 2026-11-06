@@ -1,4 +1,4 @@
-"""HTTP API over the in-memory inverted index.
+"""HTTP API over the positional inverted index (vocabulary in memory, postings on disk).
 
 Run (from the project root):
     uvicorn backend.main:app --reload            development
@@ -9,6 +9,7 @@ Endpoints:
     GET /api/document/{doc_id}?q=       full text + highlight spans for q
     GET /api/suggestions                suggested words and sample queries
     GET /api/autocomplete?prefix=       vocabulary words starting with prefix
+    GET /api/index/{term}?limit=        positional posting list of one term (df, cf, positions)
     GET /api/stats                      index / corpus statistics
     GET /api/health                     liveness check
 
@@ -33,30 +34,36 @@ FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 MAX_QUERY_CHARS = 200
 MAX_PAGE_SIZE = 100
 
-# Vite dev server by default; override with a comma-separated CORS_ORIGINS env var.
+# Browsers allowed to call the API: the deployed frontend on Vercel and the
+# local Vite dev server. Override with a comma-separated CORS_ORIGINS env var.
 CORS_ORIGINS = os.environ.get(
-    "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    "CORS_ORIGINS",
+    "https://hindi-search.vercel.app,http://localhost:5173,http://127.0.0.1:5173",
 ).split(",")
+# Vercel preview deployments, e.g. https://hindi-search-git-main-<user>.vercel.app
+CORS_ORIGIN_REGEX = os.environ.get(
+    "CORS_ORIGIN_REGEX", r"https://hindi-search(-[a-z0-9-]+)?\.vercel\.app"
+)
 
 searcher = Searcher()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load the index once; every request is then pure in-memory work.
+    # Load the vocabulary once; each request reads only its terms' postings from disk.
     if not Searcher.index_exists():
         print("Index not found, building it ...")
         build_index(verbose=True)
     searcher.load()
     print(f"Index loaded in {searcher.load_time_sec:.2f} s "
-          f"({len(searcher.docs):,} documents, {len(searcher.vocab):,} terms)")
+          f"({searcher.n_docs:,} documents, {len(searcher.vocab):,} terms)")
     yield
 
 
 app = FastAPI(
     title="Hindi Search Engine",
-    description="Inverted-index search over 16,000 Hindi documents.",
-    version="1.0.0",
+    description="Positional inverted-index search over Hindi Wikipedia.",
+    version="2.0.0",
     default_response_class=ORJSONResponse,
     lifespan=lifespan,
 )
@@ -64,6 +71,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip()],
+    allow_origin_regex=CORS_ORIGIN_REGEX or None,
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -80,7 +88,7 @@ async def server_timing(request: Request, call_next):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "documents": len(searcher.docs)}
+    return {"status": "ok", "documents": searcher.n_docs}
 
 
 @app.get("/api/search")
@@ -116,6 +124,15 @@ def autocomplete(
     limit: int = Query(8, ge=1, le=20),
 ):
     return {"prefix": prefix, "matches": searcher.autocomplete(prefix, limit)}
+
+
+@app.get("/api/index/{term}")
+def positional_index(term: str, limit: int = Query(10, ge=1, le=100)):
+    """Positional posting list of one term, read from postings.bin."""
+    res = searcher.postings(term, max_docs=limit)
+    if res is None:
+        raise HTTPException(status_code=404, detail=f"'{term}' is not in the vocabulary")
+    return res
 
 
 @app.get("/api/stats")
