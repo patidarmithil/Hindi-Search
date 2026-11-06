@@ -35,7 +35,7 @@ export default function TermIndex({ terms }) {
       {error && <p className="notice">Could not load the index: {error}</p>}
       {open && !rows && !error && <p className="loading-text">Reading posting lists…</p>}
       {rows?.map((r) =>
-        r.missing ? (
+        r.missing || !Array.isArray(r.postings) ? (
           <p key={r.term} className="ti-missing" lang="hi">
             {r.term}: not in the vocabulary
           </p>

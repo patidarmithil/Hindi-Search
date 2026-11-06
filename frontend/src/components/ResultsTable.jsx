@@ -64,7 +64,8 @@ export default function ResultsTable({ data, roundTripMs, onOpen, onPage, loadin
                     {r.title}
                   </span>
                   <span className="doc-file">
-                    Doc {r.doc_id} · BM25 score {r.score.toFixed(2)}
+                    Doc {r.doc_id}
+                    {typeof r.score === "number" && <> · BM25 score {r.score.toFixed(2)}</>}
                   </span>
                 </span>
                 <span className="num count">{nf.format(r.count)}</span>
