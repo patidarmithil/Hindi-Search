@@ -37,3 +37,4 @@ Data/
 # Local notes (not part of the project)
 task.txt
 progress.md
+output/run_log.txt

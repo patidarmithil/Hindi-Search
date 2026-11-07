@@ -3,7 +3,7 @@
 Usage:  python scripts/make_submission.py [--roll S20240010143]
 
 Creates:
-    submission/<roll>-src.zip                      engine, cli, scripts, tests (no website code)
+    submission/<roll>-src.zip                      overall.py, engine, cli, scripts, tests (no website code)
     submission/README.txt                          copy of README.md
     submission/output.txt                          copy of output/test_cases.txt
     submission/<roll>-A1-PostIndex-IR-M2026.zip    the three files above
@@ -26,7 +26,7 @@ def main() -> None:
         shutil.rmtree(OUT)
     OUT.mkdir()
 
-    files = ["cli.py", "requirements.txt", "README.md"]
+    files = ["overall.py", "cli.py", "requirements.txt", "README.md"]
     for d in ("engine", "scripts", "tests"):
         for p in sorted((ROOT / d).rglob("*.py")):
             if "__pycache__" in p.parts or p.name == "test_api.py":  # test_api needs the website backend

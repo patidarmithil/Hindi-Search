@@ -11,6 +11,20 @@ A positional inverted index over **all of Hindi Wikipedia: 129,601 articles and 
 | Dataset (original download) | https://dumps.wikimedia.org/hiwiki/latest/hiwiki-latest-pages-articles.xml.bz2 |
 | Extracted corpus + built index | https://github.com/patidarmithil/Hindi-Search/releases/tag/data-v1 (`hiwiki-corpus.zip`, `hiwiki-index.zip`) |
 
+### Run everything with one command
+
+```bash
+python overall.py
+```
+
+From the project root (Python 3.10+), this one command does the whole run ([details in section 4](#run-everything-overallpy)):
+
+- It installs missing packages.
+- It downloads the corpus and index if they are not already on disk.
+- It runs the unit tests.
+- It writes `output/test_cases.txt`.
+- It runs sample searches and prints a summary.
+
 ---
 
 ## Contents
@@ -152,6 +166,27 @@ Build time on the development machine (Intel i5-12500H, 16 threads): **59 s** fo
 
 Requirements: **Python 3.10+** (tested on 3.13) and the packages in `requirements.txt` (`numpy` for the engine; `fastapi`, `uvicorn`, `orjson` only for the website server). Run every command from the project root.
 
+### Run everything (`overall.py`)
+
+```bash
+python overall.py
+```
+
+`overall.py` runs these steps one after another and prints everything to the terminal:
+
+| Step | What happens |
+|---|---|
+| 1. Setup | Checks Python 3.10+ and installs `requirements.txt` if `numpy` or `orjson` is missing. |
+| 2. Data | Downloads `hiwiki-index.zip` (162 MB) and `hiwiki-corpus.zip` (147 MB) from the GitHub release and unzips them into `index/` and `corpus/`. It downloads only the parts that are missing, so a second run downloads nothing. |
+| 3. Tests | Runs the unit tests (`python -m unittest`). |
+| 4. Output | Runs `scripts/generate_output.py`, which writes `output/test_cases.txt` (5 test cases and 10 rare terms, 26 checks). |
+| 5. Searches | Runs six sample searches through `cli.py`: a single word, an AND query, a phrase query, normalization, OR fallback and one posting list. Their results go to `output/search_results.txt`. |
+| 6. Summary | Prints pass or fail for each step and the total time. The whole terminal output is also saved to `output/run_log.txt`. |
+
+Options: `python overall.py --skip-tests` skips step 3, and `python overall.py --from-dump` downloads the Wikipedia dump and builds the corpus and index locally instead (Option A below). The first run takes about 2 minutes plus the download time; later runs take about 35 seconds. The script exits with code 0 only if every step passes.
+
+The steps can also be run one at a time:
+
 ```bash
 python -m pip install -r requirements.txt
 ```
@@ -200,6 +235,7 @@ This downloads `hiwiki-corpus.zip` and `hiwiki-index.zip` from the GitHub releas
 
 | Module | Description |
 |---|---|
+| `overall.py` | One-command runner: checks packages, downloads only the missing data, runs the tests, writes `output/test_cases.txt` and `output/search_results.txt`, prints a summary and saves the log to `output/run_log.txt`. |
 | `engine/config.py` | All paths: dump, corpus, index files. |
 | `engine/wiki_extractor.py` | Streams the `.xml.bz2` dump, keeps main-namespace non-redirect pages, removes wiki markup (`clean_wikitext`), writes one JSON article per line. |
 | `engine/tokenizer.py` | `normalize()` (NFC, nukta folding, zero-width removal, lowercase) and `tokenize()` (regex split into Devanagari, Latin and number tokens). The stopword list is used only for suggestions. |
@@ -308,10 +344,11 @@ Hindi-Search/
 │   ├── tokenizer.py         normalization + tokenization
 │   ├── indexer.py           builds the positional index (parallel)
 │   └── searcher.py          vocabulary in memory, postings from disk, search
+├── overall.py               runs everything: data download, tests, output, sample searches
 ├── cli.py                   terminal interface
 ├── scripts/                 generate_output, benchmark, worker_benchmark, scan_corpus, fetch_data, make_submission
 ├── tests/                   unit tests
-├── output/test_cases.txt    5 test cases + 10 rare terms
+├── output/                  test_cases.txt (5 test cases + 10 rare terms); overall.py adds search_results.txt, run_log.txt
 ├── wiki_raw/                downloaded dump (not in git)
 ├── corpus/                  hiwiki_articles.jsonl (not in git; GitHub release)
 ├── index/                   postings.bin, lexicon.tsv, ... (not in git; GitHub release)

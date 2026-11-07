@@ -1,0 +1,165 @@
+--- Single word, ranked by BM25
+$ python cli.py भारत --top 10
+Hindi Search Engine (positional inverted index over Hindi Wikipedia)
+  documents indexed : 129,601
+  vocabulary        : 1,017,007 terms (kept in main memory)
+  postings          : 21,733,258 (on disk, postings.bin 316.8 MB)
+  index load time   : 1.444 s
+
+Query              : भारत
+Terms              : भारत
+Documents found    : 53,226
+Documents searched : 129,601
+Total occurrences  : 127,753
+Posting lists read : 1 from disk (0 = query cache)
+Time taken         : 0.010425 seconds
+
+  Rank   Doc ID  Count     BM25  Title
+---------------------------------------------------------------------------------------------
+     1    25252    235    1.910  भारत सारावली
+     2    87317     20    1.888  भारत में पारिस्थितिक क्षेत्रों की सूची
+     3    99103     33    1.882  भारत एक उभरती हुई महाशक्ति
+     4    97440     18    1.878  भारत सरकार अधिनियम
+     5      947     36    1.877  चीनी-तिब्बती भाषा-परिवार
+     6    91648     46    1.869  भारत के राष्ट्राध्यक्षों की सूची
+     7    76734     16    1.869  भारत की जनसांख्यिकी
+     8    57808     11    1.867  भारत के विदेश सचिव
+     9   114184     11    1.866  भारत के लिए राजदूत और उच्चायुक्तों की सूची
+    10    21770     20    1.863  भारत के प्रथम
+
+Showing top 10 of 53,226 documents (use :top all or --top 0 for all).
+
+--- AND query: every word must be in the document
+$ python cli.py गंगा नदी हिमालय --top 10
+Hindi Search Engine (positional inverted index over Hindi Wikipedia)
+  documents indexed : 129,601
+  vocabulary        : 1,017,007 terms (kept in main memory)
+  postings          : 21,733,258 (on disk, postings.bin 316.8 MB)
+  index load time   : 2.003 s
+
+Query              : गंगा नदी हिमालय
+Terms              : गंगा नदी हिमालय
+Documents found    : 206
+Documents searched : 129,601
+Total occurrences  : 3,288
+Posting lists read : 3 from disk (0 = query cache)
+Time taken         : 0.008144 seconds
+
+  Rank   Doc ID  Count     BM25  Title
+---------------------------------------------------------------------------------------------
+     1    20304     40   21.019  गंगा की सहायक नदियाँ
+     2     1404     10   20.762  महानंदा नदी
+     3   113107     18   19.825  गंगा बेसिन
+     4   100373     13   19.705  सेती नदी
+     5     3312     11   19.552  पाञ्चाल
+     6    27371      8   18.620  भीलांगना नदी
+     7    27630     17   18.548  उत्तराखण्ड की नदियाँ
+     8     8286     56   18.467  अपवाह तन्त्र
+     9      408    249   18.412  गंगा नदी
+    10    81569     20   18.396  कुमाऊँ हिमालय
+
+Showing top 10 of 206 documents (use :top all or --top 0 for all).
+
+--- Phrase query: words next to each other, found with positions
+$ python cli.py "महात्मा गांधी" --top 10
+Hindi Search Engine (positional inverted index over Hindi Wikipedia)
+  documents indexed : 129,601
+  vocabulary        : 1,017,007 terms (kept in main memory)
+  postings          : 21,733,258 (on disk, postings.bin 316.8 MB)
+  index load time   : 1.937 s
+
+Query              : "महात्मा गांधी"
+Phrases            : महात्मा गांधी
+Documents found    : 885
+Documents searched : 129,601
+Total occurrences  : 1,406
+Posting lists read : 2 from disk (0 = query cache)
+Time taken         : 0.005975 seconds
+
+  Rank   Doc ID  Count     BM25  Title
+---------------------------------------------------------------------------------------------
+     1   119430     12   10.160  प्यारेलाल नय्यर
+     2    84460     12    9.907  भारतीय ५०० रुपये का नोट
+     3   112667     10    9.460  भारतीय २० रुपये का नोट
+     4   112668      9    9.398  भारतीय ५० रुपये का नोट
+     5    23381      3    9.298  हिंदुस्तानी प्रचार सभा, मुंबई
+     6    93143      7    9.297  भारतीय 100 रुपये का नोट
+     7    17324      3    9.250  राजघाट समाधि परिसर
+     8    16844      5    9.242  महात्मा गांधी चित्रकूट ग्रामोदय विश्वविद्यालय
+     9    25764      2    9.163  महात्मा गांधी स्मारक चिकित्सा महाविद्यालय, इन्दौर
+    10     9928      4    9.130  पलवल
+
+Showing top 10 of 885 documents (use :top all or --top 0 for all).
+
+--- Normalization: nukta spelling matches the plain spelling
+$ python cli.py ज़िला --top 5
+Hindi Search Engine (positional inverted index over Hindi Wikipedia)
+  documents indexed : 129,601
+  vocabulary        : 1,017,007 terms (kept in main memory)
+  postings          : 21,733,258 (on disk, postings.bin 316.8 MB)
+  index load time   : 1.460 s
+
+Query              : ज़िला
+Terms              : जिला
+Documents found    : 10,686
+Documents searched : 129,601
+Total occurrences  : 20,870
+Posting lists read : 1 from disk (0 = query cache)
+Time taken         : 0.002613 seconds
+
+  Rank   Doc ID  Count     BM25  Title
+---------------------------------------------------------------------------------------------
+     1    55520    557    5.427  नवोदय विद्यालयों की सूची
+     2    15759     33    5.410  तमिलनाडु के जिले
+     3    17951     30    5.407  ओड़िशा के जिले
+     4    82978     30    5.385  कर्नाटक के मण्डल
+     5     1830     39    5.384  बिहार के जिले
+
+Showing top 5 of 10,686 documents (use :top all or --top 0 for all).
+
+--- Unknown word plus a known word: OR fallback
+$ python cli.py हिमालय क्ष्यज्ञत्र --top 5
+Hindi Search Engine (positional inverted index over Hindi Wikipedia)
+  documents indexed : 129,601
+  vocabulary        : 1,017,007 terms (kept in main memory)
+  postings          : 21,733,258 (on disk, postings.bin 316.8 MB)
+  index load time   : 1.522 s
+
+Query              : हिमालय क्ष्यज्ञत्र
+Terms              : हिमालय क्ष्यज्ञत्र
+Not in any document : क्ष्यज्ञत्र
+No document contains every term / phrase; showing documents with any of them.
+Documents found    : 1,464
+Documents searched : 129,601
+Total occurrences  : 2,764
+Posting lists read : 1 from disk (0 = query cache)
+Time taken         : 0.000978 seconds
+
+  Rank   Doc ID  Count     BM25  Title
+---------------------------------------------------------------------------------------------
+     1    81564     15    9.491  नेपाल हिमालय
+     2     1418    101    9.373  हिमालय
+     3    81569     17    9.358  कुमाऊँ हिमालय
+     4    58402     31    9.322  हिमालयी भूगर्भशास्त्र
+     5    81570      8    9.305  कश्मीर हिमालय
+
+Showing top 5 of 1,464 documents (use :top all or --top 0 for all).
+
+--- Positional posting list of one term (DF, CF, positions)
+$ python cli.py --index गंगा --top 5
+Hindi Search Engine (positional inverted index over Hindi Wikipedia)
+  documents indexed : 129,601
+  vocabulary        : 1,017,007 terms (kept in main memory)
+  postings          : 21,733,258 (on disk, postings.bin 316.8 MB)
+  index load time   : 1.363 s
+
+Term : गंगा
+DF   : 2,051 documents contain it
+CF   : 5,026 occurrences in the whole collection
+record at byte 106,109,748 of postings.bin, 31,512 bytes
+  doc       5  tf    7  positions [161, 952, 1002, 1301, 1391, 2562, 2843]  भारत
+  doc      11  tf    4  positions [185, 233, 237, 268]  जन गण मन
+  doc      12  tf    1  positions [2696]  वन्दे मातरम्
+  doc      22  tf    1  positions [457]  उपनिषद्
+  doc      26  tf    7  positions [105, 113, 260, 276, 317, 358, 393]  खगोल शास्त्र
+  ... first 5 of 2,051 documents shown

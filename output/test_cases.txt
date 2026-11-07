@@ -8,7 +8,7 @@ Vocabulary        : 1,017,007 terms (held in main memory)
 Postings          : 21,733,258 (term, document) pairs
 postings.bin      : 316.8 MB on disk (secondary memory)
 Index build time  : 58.81 s with 10 worker processes
-Vocabulary load   : 1.48 s
+Vocabulary load   : 1.44 s
 
 Notation: term -> DF, CF: doc_id (title), tf=<term frequency>: <positions>
 Positions are 0-based token indexes in the article (title + text), after normalization.
@@ -35,7 +35,7 @@ Test case 1: positional posting list of one term (भारत), read from disk
 
 Test case 2: phrase query "महात्मा गांधी" (uses term positions)
 ------------------------------------------------------------------------------------------
-  mode=phrase  documents found=885  phrase occurrences=1,406  time=6.09 ms
+  mode=phrase  documents found=885  phrase occurrences=1,406  time=4.74 ms
     rank 1: doc 119430 (प्यारेलाल नय्यर) phrase count=12, recount=12
     rank 2: doc 84460 (भारतीय ५०० रुपये का नोट) phrase count=12, recount=12
     rank 3: doc 112667 (भारतीय २० रुपये का नोट) phrase count=10, recount=10
@@ -47,7 +47,7 @@ Test case 2: phrase query "महात्मा गांधी" (uses term pos
 
 Test case 3: multi-word AND query: गंगा नदी हिमालय
 ------------------------------------------------------------------------------------------
-  mode=and  documents found=206  time=0.56 ms
+  mode=and  documents found=206  time=0.51 ms
     rank 1: doc 20304 (गंगा की सहायक नदियाँ) count=40 BM25=21.0192
     rank 2: doc 1404 (महानंदा नदी) count=10 BM25=20.7616
     rank 3: doc 113107 (गंगा बेसिन) count=18 BM25=19.8249
@@ -67,12 +67,12 @@ Test case 4: normalization, unknown word and OR fallback
 
 Test case 5: vocabulary in main memory, posting lists on secondary memory
 ------------------------------------------------------------------------------------------
-  query 'भारतीय संविधान': 2 posting lists read, 278,264 bytes of 332,140,064 in postings.bin, 1.49 ms
+  query 'भारतीय संविधान': 2 posting lists read, 278,264 bytes of 332,140,064 in postings.bin, 1.62 ms
   [PASS] exactly one disk read per query term
   [PASS] a query reads only a small part of postings.bin
   in-memory lexicon arrays (df, cf, offset, size): 31.0 MB for 1,017,007 terms; posting lists stay in postings.bin (316.8 MB)
   [PASS] bytes read = 8 x DF per term (doc_ids + tfs only; positions skipped for non-phrase queries)
-  slowest of 5 uncached queries (incl. the most frequent word 'के'): 48.3 ms
+  slowest of 5 uncached queries (incl. the most frequent word 'के'): 42.2 ms
   [PASS] every query answered in under 500 ms
 
 ==========================================================================================
